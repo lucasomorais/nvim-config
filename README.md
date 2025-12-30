@@ -1,5 +1,3 @@
-Aqui está o conteúdo formatado para o seu README.md. Utilizei blocos de código e listas para facilitar a leitura e garantir que cada comando ocupe sua própria linha.
-
 Atalhos de Teclado (Keymaps)
 Navegação e Busca
 <leader>pf : Abrir navegador de arquivos (Telescope)
