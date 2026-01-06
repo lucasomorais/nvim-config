@@ -12,30 +12,62 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
-    -- LSP e Gerenciamento de Servidores
+    -- === 1. O BÁSICO (Mason para baixar os programas) ===
     { "williamboman/mason.nvim", config = true },
+    -- Nota: Mantemos este plugin apenas para o Mason saber onde instalar, 
+    -- mas não vamos usá-lo para configurar o C#
     { "williamboman/mason-lspconfig.nvim", config = true },
+    
+    -- === 2. CONFIGURAÇÃO PURA DO LSP (Sem plugin lspconfig para C#) ===
     {
         "neovim/nvim-lspconfig",
         config = function()
-            -- Carrega suas configurações gerais (Go, etc)
-            local lsp_setup = require("lucas.lsp")
-            local lspconfig = require("lspconfig")
+            -- Carregamos suas configs do lucas.lsp se existirem
+            local status, lsp_setup = pcall(require, "lucas.lsp")
+            local caps = vim.lsp.protocol.make_client_capabilities()
+            local attach = nil
 
-            -- Configuração específica para C# (OmniSharp)
-            -- Ele usa o dotnet que já deve estar no seu sistema
-            lspconfig.omnisharp.setup({
-                capabilities = lsp_setup.capabilities,
-                on_attach = lsp_setup.on_attach, -- Garante que seus atalhos funcionem no C#
-                cmd = { "dotnet", vim.fn.stdpath("data") .. "/mason/packages/omnisharp/libexec/OmniSharp.dll" },
-                enable_import_completion = true,
-                organize_imports_on_format = true,
-                enable_roslyn_analyzers = true,
+            if status and type(lsp_setup) == "table" then
+                caps = lsp_setup.capabilities or caps
+                attach = lsp_setup.on_attach
+            end
+
+            -- AQUI ESTÁ A MÁGICA: Automação Nativa
+            -- Isso roda toda vez que você abre um arquivo .cs
+            -- Ignora plugins deprecados e fala direto com o Neovim
+            vim.api.nvim_create_autocmd("FileType", {
+                pattern = "cs",
+                callback = function(args)
+                    -- 1. Achar onde está o OmniSharp que o Mason baixou
+                    local omnisharp_dll = vim.fn.stdpath("data") .. "/mason/packages/omnisharp/libexec/OmniSharp.dll"
+                    
+                    -- 2. Achar a raiz do projeto (onde está o .csproj)
+                    local root = vim.fs.find({ '*.sln', '*.csproj', '.git' }, { path = args.file, upward = true })[1]
+                    if root then root = vim.fs.dirname(root) end
+
+                    if not root then
+                        print("Aviso: Nenhum arquivo .csproj encontrado. LSP de C# não iniciará.")
+                        return
+                    end
+
+                    -- 3. Iniciar o servidor manualmente (Bypass de plugins)
+                    vim.lsp.start({
+                        name = "omnisharp",
+                        cmd = { "dotnet", omnisharp_dll },
+                        root_dir = root,
+                        capabilities = caps,
+                        on_attach = attach,
+                        settings = {
+                            FormattingOptions = { EnableEditorConfigSupport = true },
+                            RoslynExtensionsOptions = { EnableAnalyzersSupport = true },
+                        }
+                    })
+                end,
             })
         end
     },
 
-    -- Harpoon para navegação rápida
+    -- === 3. FERRAMENTAS EXTRAS ===
     {
         'ThePrimeagen/harpoon',
         dependencies = { 'nvim-lua/plenary.nvim' },
@@ -50,37 +82,22 @@ require("lazy").setup({
             vim.keymap.set("n", "<C-s>", function() ui.nav_file(4) end)
         end
     },
-
-    -- Undotree
-    {
-        'mbbill/undotree',
-        config = function()
-            vim.keymap.set("n", "<leader>u", vim.cmd.UndotreeToggle)
-        end
-    },
-
-    -- Telescope
-    {
-        'nvim-telescope/telescope.nvim',
-        branch = '0.1.x',
-        dependencies = { 'nvim-lua/plenary.nvim' }
-    },
-
-    -- TEMA: Catppuccin
+    { 'mbbill/undotree', config = function() vim.keymap.set("n", "<leader>u", vim.cmd.UndotreeToggle) end },
+    { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = { 'nvim-lua/plenary.nvim' } },
     { "catppuccin/nvim", name = "catppuccin", priority = 1000 },
 
-    -- Treesitter (Cores do código)
+    -- === 4. TREESITTER (Cores) ===
     {
         "nvim-treesitter/nvim-treesitter",
         build = ":TSUpdate",
         config = function()
-            local status, configs = pcall(require, "nvim-treesitter.configs")
-            if not status then return end
+            -- Proteção de disco
+            local plugin_path = vim.fn.stdpath("data") .. "/lazy/nvim-treesitter/lua/nvim-treesitter/configs.lua"
+            if vim.fn.filereadable(plugin_path) == 0 then return end
 
-            configs.setup({
-                -- Adicionado c_sharp explicitamente
+            require("nvim-treesitter.configs").setup({
                 ensure_installed = { "lua", "vim", "vimdoc", "go", "javascript", "c", "c_sharp" },
-                sync_install = true,
+                sync_install = false,
                 auto_install = true,
                 highlight = {
                     enable = true,
@@ -89,4 +106,12 @@ require("lazy").setup({
             })
         end,
     },
+})
+
+-- === 5. GARANTIA DE CORES ===
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "cs",
+    callback = function()
+        pcall(vim.treesitter.start)
+    end,
 })
