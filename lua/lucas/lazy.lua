@@ -1,13 +1,13 @@
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.loop or vim.uv).fs_stat(lazypath) then
-  vim.fn.system({
-    "git",
-    "clone",
-    "--filter=blob:none",
-    "https://github.com/folke/lazy.nvim.git",
-    "--branch=stable",
-    lazypath,
-  })
+    vim.fn.system({
+        "git",
+        "clone",
+        "--filter=blob:none",
+        "https://github.com/folke/lazy.nvim.git",
+        "--branch=stable",
+        lazypath,
+    })
 end
 vim.opt.rtp:prepend(lazypath)
 
@@ -18,7 +18,20 @@ require("lazy").setup({
     {
         "neovim/nvim-lspconfig",
         config = function()
-            require("lucas.lsp")
+            -- Carrega suas configurações gerais (Go, etc)
+            local lsp_setup = require("lucas.lsp")
+            local lspconfig = require("lspconfig")
+
+            -- Configuração específica para C# (OmniSharp)
+            -- Ele usa o dotnet que já deve estar no seu sistema
+            lspconfig.omnisharp.setup({
+                capabilities = lsp_setup.capabilities,
+                on_attach = lsp_setup.on_attach, -- Garante que seus atalhos funcionem no C#
+                cmd = { "dotnet", vim.fn.stdpath("data") .. "/mason/packages/omnisharp/libexec/OmniSharp.dll" },
+                enable_import_completion = true,
+                organize_imports_on_format = true,
+                enable_roslyn_analyzers = true,
+            })
         end
     },
 
@@ -53,31 +66,24 @@ require("lazy").setup({
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
 
-   -- NOVO TEMA: Catppuccin (Mais vibrante)
+    -- TEMA: Catppuccin
     { "catppuccin/nvim", name = "catppuccin", priority = 1000 },
 
+    -- Treesitter (Cores do código)
     {
         "nvim-treesitter/nvim-treesitter",
         build = ":TSUpdate",
         config = function()
-            -- O pcall evita que o Neovim trave se o módulo não for encontrado na primeira vez
             local status, configs = pcall(require, "nvim-treesitter.configs")
-            if not status then 
-                return 
-            end
+            if not status then return end
 
             configs.setup({
-                -- Adicionamos o "go" de volta para garantir a cor nas funções
-                ensure_installed = { "lua", "vim", "vimdoc", "go", "javascript", "c" }, 
-                
-                -- sync_install como true fará o Neovim esperar a compilação terminar
-                sync_install = true, 
-                
-                -- auto_install ajuda se você abrir arquivos de outras linguagens
+                -- Adicionado c_sharp explicitamente
+                ensure_installed = { "lua", "vim", "vimdoc", "go", "javascript", "c", "c_sharp" },
+                sync_install = true,
                 auto_install = true,
-
                 highlight = {
-                    enable = true, -- ISSO é o que colore as funções
+                    enable = true,
                     additional_vim_regex_highlighting = false,
                 },
             })
